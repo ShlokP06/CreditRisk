@@ -6,4 +6,5 @@ services/scoring/model/*.pkl
 services/scoring/model/*.pt
 .DS_Store
 PLAN.md
+.vscode/
 
