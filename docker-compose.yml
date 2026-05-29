@@ -1,0 +1,106 @@
+services:
+  ingestion:
+    build: ./services/ingestion
+    ports:
+      - "8001:8001"
+    networks:
+      - risk-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  feature:
+    build: ./services/feature
+    ports:
+      - "8002:8002"
+    networks:
+      - risk-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  scoring:
+    build: ./services/scoring
+    ports:
+      - "8003:8003"
+    environment:
+      - MODEL_PATH=/app/model/model.pt
+      - MODEL_FALLBACK=dummy
+    volumes:
+      - ./services/scoring/model:/app/model:ro
+    networks:
+      - risk-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  alert:
+    build: ./services/alert
+    ports:
+      - "8004:8004"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - ALERT_THRESHOLD=0.7
+    networks:
+      - risk-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    build: ./gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - FEATURE_URL=http://feature:8002
+      - SCORING_URL=http://scoring:8003
+      - ALERT_URL=http://alert:8004
+      - ALERT_THRESHOLD=0.7
+    depends_on:
+      feature:
+        condition: service_healthy
+      scoring:
+        condition: service_healthy
+      alert:
+        condition: service_healthy
+    networks:
+      - risk-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - risk-net
+    depends_on:
+      - gateway
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - risk-net
+    depends_on:
+      - prometheus
+
+networks:
+  risk-net:
+    driver: bridge

@@ -16,7 +16,7 @@ async def lifespan(app):
     yield
     await client.aclose()
 
-app = FastAPI(title="api-gatewaty", lifespan = lifespan)
+app = FastAPI(title="api-gateway", lifespan=lifespan)
 
 @app.post("/score", response_model=GatewayScoreResponse)
 async def score(txn: Transaction, request: Request):

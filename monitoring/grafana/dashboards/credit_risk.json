@@ -1,0 +1,142 @@
+{
+  "title": "Credit Risk Platform",
+  "uid": "credit-risk",
+  "schemaVersion": 38,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Transaction Rate",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 6 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "rate(transactions_received_total[1m])",
+        "legendFormat": "txns/s"
+      }]
+    },
+    {
+      "id": 2,
+      "title": "High-Risk Rate %",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 6 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "rate(predictions_total{risk_band=\"high\"}[5m]) / rate(predictions_total[5m]) * 100",
+        "legendFormat": "% high-risk"
+      }]
+    },
+    {
+      "id": 3,
+      "title": "Active Alerts",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 3 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "active_alerts",
+        "legendFormat": "alerts"
+      }]
+    },
+    {
+      "id": 4,
+      "title": "Model Version",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 3 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "model_version_info",
+        "legendFormat": "{{version}}"
+      }]
+    },
+    {
+      "id": 5,
+      "title": "Alerts Triggered Total",
+      "type": "stat",
+      "gridPos": { "x": 16, "y": 3, "w": 4, "h": 3 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "alerts_triggered_total",
+        "legendFormat": "total"
+      }]
+    },
+    {
+      "id": 6,
+      "title": "Graph Size",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 3, "w": 4, "h": 3 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "graph_nodes_total",
+        "legendFormat": "nodes"
+      }]
+    },
+    {
+      "id": 7,
+      "title": "Score Distribution by Band",
+      "type": "bargauge",
+      "gridPos": { "x": 0, "y": 6, "w": 8, "h": 6 },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "predictions_total{risk_band=\"low\"}",
+          "legendFormat": "low"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "predictions_total{risk_band=\"medium\"}",
+          "legendFormat": "medium"
+        },
+        {
+          "datasource": "Prometheus",
+          "expr": "predictions_total{risk_band=\"high\"}",
+          "legendFormat": "high"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Scoring Latency p95",
+      "type": "timeseries",
+      "gridPos": { "x": 8, "y": 6, "w": 8, "h": 6 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "histogram_quantile(0.95, rate(scoring_latency_seconds_bucket[5m]))",
+        "legendFormat": "p95"
+      }]
+    },
+    {
+      "id": 9,
+      "title": "Gateway Pipeline Latency p95",
+      "type": "timeseries",
+      "gridPos": { "x": 16, "y": 6, "w": 8, "h": 6 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "histogram_quantile(0.95, rate(gateway_pipeline_latency_seconds_bucket[5m]))",
+        "legendFormat": "p95"
+      }]
+    },
+    {
+      "id": 10,
+      "title": "Pipeline Errors by Stage",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 6 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "rate(pipeline_errors_total[5m])",
+        "legendFormat": "{{stage}}"
+      }]
+    },
+    {
+      "id": 11,
+      "title": "Feature Extraction Latency p95",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 6 },
+      "targets": [{
+        "datasource": "Prometheus",
+        "expr": "histogram_quantile(0.95, rate(feature_extraction_latency_seconds_bucket[5m]))",
+        "legendFormat": "p95"
+      }]
+    }
+  ]
+}

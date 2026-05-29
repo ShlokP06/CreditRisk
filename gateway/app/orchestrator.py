@@ -3,7 +3,7 @@ from fastapi import HTTPException
 from .schemas import GatewayScoreResponse
 
 class Orchestrator:
-    def __iniit__(self, client, settings):
+    def __init__(self, client, settings):
         self.client = client
         self.settings = settings
 
@@ -16,7 +16,7 @@ class Orchestrator:
                 "transaction_id": result["transaction_id"],
                 "user_id": txn.user_id,
                 "risk_score": result["risk_score"],
-                "risk_band": result["result_band"],
+                "risk_band": result["risk_band"],
                 "top_contributors": result["top_contributors"]
             }
             await self.post(self.settings.alert_url + "/alert", alert_body)
