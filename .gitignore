@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.env
+data/raw/
+services/scoring/model/*.pkl
+services/scoring/model/*.pt
+.DS_Store
+PLAN.md
+
