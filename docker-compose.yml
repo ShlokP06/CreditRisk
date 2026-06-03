@@ -1,15 +1,42 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: credit_risk
+      POSTGRES_USER: credit
+      POSTGRES_PASSWORD: credit
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - risk-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U credit -d credit_risk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   ingestion:
     build: ./services/ingestion
     ports:
       - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://credit:credit@postgres:5432/credit_risk
+      - TRANSACTION_CSV_PATH=/data/train_transaction.csv
+      - IDENTITY_CSV_PATH=/data/train_identity.csv
+    volumes:
+      - ./data/raw:/data:ro
     networks:
       - risk-net
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
-      interval: 10s
+      interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 20
 
   feature:
     build: ./services/feature
@@ -28,8 +55,7 @@ services:
     ports:
       - "8003:8003"
     environment:
-      - MODEL_PATH=/app/model/model.pt
-      - MODEL_FALLBACK=dummy
+      - MODEL_PATH=/app/model/model.pkl
     volumes:
       - ./services/scoring/model:/app/model:ro
     networks:
@@ -63,6 +89,7 @@ services:
       - FEATURE_URL=http://feature:8002
       - SCORING_URL=http://scoring:8003
       - ALERT_URL=http://alert:8004
+      - INGESTION_URL=http://ingestion:8001
       - ALERT_THRESHOLD=0.7
     depends_on:
       feature:
@@ -73,6 +100,17 @@ services:
         condition: service_healthy
     networks:
       - risk-net
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3001:3001"
+    environment:
+      - NEXT_PUBLIC_GATEWAY_URL=http://localhost:8000
+    networks:
+      - risk-net
+    depends_on:
+      - gateway
 
   prometheus:
     image: prom/prometheus:latest
@@ -104,3 +142,7 @@ services:
 networks:
   risk-net:
     driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
