@@ -1,10 +1,18 @@
 import asyncio
 import math
-from datetime import timedelta
 
-import networkx as nx
+from .schemas import FeatureVector
 
-from .schemas import SubgraphPayload
+
+PRODUCT_MAP = {"W": 0, "H": 1, "C": 2, "S": 3, "R": 4}
+BRAND_MAP = {"visa": 0, "mastercard": 1, "american express": 2, "discover": 3}
+TYPE_MAP = {"credit": 0, "debit": 1}
+EMAIL_MAP = {
+    "gmail.com": 0, "yahoo.com": 1,
+    "hotmail.com": 2, "outlook.com": 2,
+    "anonymous.com": 3,
+}
+DEVICE_MAP = {"desktop": 0, "mobile": 1}
 
 
 class RunningStats:
@@ -13,14 +21,14 @@ class RunningStats:
         self.mean = 0.0
         self.m2 = 0.0
 
-    def update(self, x):
+    def update(self, x: float) -> None:
         self.count += 1
         delta = x - self.mean
         self.mean += delta / self.count
         delta2 = x - self.mean
         self.m2 += delta * delta2
 
-    def normalize(self, x):
+    def normalize(self, x: float) -> float:
         if self.count < 2:
             return 0.0
         std = math.sqrt(self.m2 / self.count)
@@ -29,70 +37,46 @@ class RunningStats:
 
 class FeatureEngine:
     def __init__(self):
-        self.user_history = {}
-        self.merchant_history = {}
-        self.graph = nx.Graph()
         self.amount_stats = RunningStats()
+        self.user_tx_counts: dict[str, int] = {}
         self.lock = asyncio.Lock()
 
-    async def extract(self, txn):
+    async def extract(self, txn) -> FeatureVector:
         async with self.lock:
-            ts = txn.timestamp
-            self.prune(self.user_history, ts)
-            self.prune(self.merchant_history, ts)
-
-            self.graph.add_edge(txn.user_id, txn.merchant_id)
             self.amount_stats.update(txn.amount)
-
-            node_count = max(self.graph.number_of_nodes(), 1)
-            user_degree = self.graph.degree(txn.user_id)
-            merchant_degree = self.graph.degree(txn.merchant_id)
-
-            user_vel_1h = self.velocity(self.user_history, txn.user_id, ts, 1)
-            user_vel_24h = self.velocity(self.user_history, txn.user_id, ts, 24)
-            merchant_vel_1h = self.velocity(self.merchant_history, txn.merchant_id, ts, 1)
-            merchant_vel_24h = self.velocity(self.merchant_history, txn.merchant_id, ts, 24)
+            self.user_tx_counts[txn.user_id] = self.user_tx_counts.get(txn.user_id, 0) + 1
 
             amount_norm = self.amount_stats.normalize(txn.amount)
 
-            user_features = [
-                user_degree / node_count,
-                user_vel_1h / 10.0,
-                user_vel_24h / 100.0,
+            features = [
                 amount_norm,
-            ]
-            merchant_features = [
-                merchant_degree / node_count,
-                merchant_vel_1h / 10.0,
-                merchant_vel_24h / 100.0,
-                amount_norm,
-            ]
-            edge_features = [
-                amount_norm,
-                ts.hour / 23.0,
-                float(ts.weekday() >= 5),
+                math.log1p(txn.amount),
+                float(txn.timestamp.hour),
+                float(PRODUCT_MAP.get(txn.product_cd.upper(), -1)),
+                float(BRAND_MAP.get(txn.card_brand.lower(), -1)),
+                float(TYPE_MAP.get(txn.card_type.lower(), -1)),
+                float(EMAIL_MAP.get(txn.p_emaildomain.lower(), 4)),
+                float(txn.m1),
+                float(txn.m2),
+                float(txn.m3),
+                float(txn.m4),
+                float(txn.m5),
+                float(txn.m6),
+                float(DEVICE_MAP.get(txn.device_type.lower(), -1)),
+                float(self.user_tx_counts[txn.user_id]),
+                float(txn.addr1),
+                math.log1p(max(txn.dist1, 0.0)),
+                math.log1p(max(txn.c1, 0.0)),
+                math.log1p(max(txn.c2, 0.0)),
+                math.log1p(max(txn.c6, 0.0)),
+                math.log1p(max(txn.c13, 0.0)),
+                math.log1p(max(txn.c14, 0.0)),
+                float(txn.d1),
+                float(txn.d4),
             ]
 
-            self.user_history.setdefault(txn.user_id, []).append((ts, txn.amount))
-            self.merchant_history.setdefault(txn.merchant_id, []).append((ts, txn.amount))
-
-            return SubgraphPayload(
+            return FeatureVector(
                 transaction_id=txn.transaction_id,
                 user_id=txn.user_id,
-                user_features=user_features,
-                merchant_features=merchant_features,
-                edge_features=edge_features,
+                features=features,
             )
-
-    def velocity(self, history, node_id, ts, hours):
-        cutoff = ts - timedelta(hours=hours)
-        return sum(1 for t, _ in history.get(node_id, []) if t >= cutoff)
-
-    def prune(self, history, ts):
-        cutoff = ts - timedelta(hours=24)
-        for node_id in list(history.keys()):
-            kept = [(t, a) for t, a in history[node_id] if t >= cutoff]
-            if kept:
-                history[node_id] = kept
-            else:
-                del history[node_id]
