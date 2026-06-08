@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
-from .schemas import SubgraphPayload, ScoreResponse
+from .schemas import FeatureVector, ScoreResponse
 from .config import settings
 from .model import FraudModel
 from .metrics import scoring_latency, predictions, model_info, metrics_response
@@ -21,7 +21,7 @@ app = FastAPI(title="scoring-service", lifespan=lifespan)
 
 
 @app.post("/score", response_model=ScoreResponse)
-async def score(payload: SubgraphPayload, request: Request):
+async def score(payload: FeatureVector, request: Request):
     model = request.app.state.model
     start = time.perf_counter()
     result = model.predict(payload)
